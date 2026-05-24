@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#1c1917">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="年齢手帳">
+  <title>年齢手帳</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body {
+      font-family: 'Hiragino Sans', 'Yu Gothic', 'Noto Sans JP', sans-serif;
+      background: #fafaf9;
+      color: #292524;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+    input, textarea, select { font-family: inherit; }
+    input:focus, textarea:focus, select:focus { outline: none; }
+
+    .app { max-width: 640px; margin: 0 auto; padding: 32px 20px 120px; min-height: 100vh; }
+
+    .header { margin-bottom: 24px; }
+    .header h1 { font-size: 30px; font-weight: 300; letter-spacing: -0.02em; color: #1c1917; margin-bottom: 4px; }
+    .header p { font-size: 11px; color: #78716c; letter-spacing: 0.15em; text-transform: uppercase; }
+
+    /* 誕生日通知 */
+    .upcoming { background: #fffbeb; border: 1px solid #fde68a; border-radius: 16px; padding: 16px; margin-bottom: 20px; }
+    .upcoming-header { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .upcoming-header svg { width: 16px; height: 16px; color: #b45309; }
+    .upcoming-header h2 { font-size: 13px; font-weight: 500; color: #78350f; }
+    .upcoming-item { width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.6); border-radius: 12px; text-align: left; margin-bottom: 6px; transition: background 0.15s; }
+    .upcoming-item:last-child { margin-bottom: 0; }
+    .upcoming-item:active { background: #fff; }
+    .upcoming-item .days { font-size: 12px; color: #92400e; font-weight: 500; }
+
+    /* 検索 */
+    .search-wrap { position: relative; margin-bottom: 12px; }
+    .search-wrap svg { position: absolute; left: 16px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #a8a29e; pointer-events: none; }
+    .search-input { width: 100%; padding: 14px 16px 14px 44px; background: #fff; border: 1px solid #e7e5e4; border-radius: 16px; font-size: 15px; color: #292524; transition: border-color 0.15s; }
+    .search-input::placeholder { color: #a8a29e; }
+    .search-input:focus { border-color: #a8a29e; }
+
+    /* フィルター */
+    .filter-row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .filter-btn { padding: 8px 14px; background: #fff; border: 1px solid #e7e5e4; border-radius: 999px; font-size: 13px; color: #57534e; transition: all 0.15s; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+    .filter-btn:active { background: #f5f5f4; }
+    .filter-btn.active { background: #1c1917; color: #fff; border-color: #1c1917; }
+    .filter-btn .count { font-size: 11px; opacity: 0.65; font-weight: 400; }
+
+    .month-filter { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 8px; margin-bottom: 16px; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .month-filter::-webkit-scrollbar { display: none; }
+    .month-btn { flex-shrink: 0; padding: 6px 12px; background: #fff; border: 1px solid #e7e5e4; border-radius: 999px; font-size: 12px; color: #57534e; transition: all 0.15s; font-weight: 500; }
+    .month-btn:active { background: #f5f5f4; }
+    .month-btn.active { background: #0c4a6e; color: #fff; border-color: #0c4a6e; }
+
+    /* 一覧 */
+    .empty { text-align: center; padding: 64px 0; color: #78716c; font-size: 14px; }
+    .empty svg { width: 48px; height: 48px; color: #d6d3d1; margin-bottom: 12px; }
+    .person-list { display: flex; flex-direction: column; gap: 8px; }
+    .person-card { width: 100%; background: #fff; border: 1px solid #e7e5e4; border-radius: 16px; padding: 16px; display: flex; justify-content: space-between; align-items: center; text-align: left; transition: border-color 0.15s; }
+    .person-card:active { border-color: #a8a29e; }
+    .person-info { flex: 1; min-width: 0; }
+    .person-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+    .person-name .name-text { font-weight: 500; color: #1c1917; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+    .person-meta { font-size: 11px; color: #78716c; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .person-member-no { font-family: 'SF Mono', Menlo, monospace; color: #57534e; }
+    .person-birthday { font-size: 12px; color: #78716c; margin-top: 2px; }
+    .person-age { display: flex; align-items: baseline; gap: 4px; margin-left: 12px; flex-shrink: 0; }
+    .person-age .num { font-size: 28px; font-weight: 300; color: #1c1917; line-height: 1; }
+    .person-age .unit { font-size: 12px; color: #78716c; }
+
+    /* バッジ・アイコン */
+    .badge-senior { display: inline-flex; align-items: center; padding: 2px 8px; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.02em; flex-shrink: 0; }
+    .badge-noguide { display: inline-flex; align-items: center; padding: 2px 7px; background: #fef2f2; color: #b91c1c; border-radius: 6px; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+    .badge-card { display: inline-flex; align-items: center; padding: 2px 7px; background: #f0fdf4; color: #15803d; border-radius: 6px; font-size: 10px; font-weight: 600; flex-shrink: 0; gap: 3px; }
+    .badge-card svg { width: 10px; height: 10px; }
+    .photo-icon { display: inline-flex; align-items: center; color: #78716c; gap: 2px; font-size: 10px; }
+    .photo-icon svg { width: 11px; height: 11px; }
+
+    /* 追加ボタン */
+    .fab { position: fixed; bottom: 24px; right: 24px; width: 56px; height: 56px; background: #1c1917; color: #fff; border-radius: 50%; box-shadow: 0 4px 14px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; z-index: 30; }
+    .fab svg { width: 24px; height: 24px; }
+    .fab:active { background: #44403c; }
+
+    /* モーダル */
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(28,25,23,0.4); backdrop-filter: blur(4px); display: flex; align-items: flex-end; justify-content: center; z-index: 40; padding: 16px; animation: fadeIn 0.2s ease; overflow-y: auto; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @media (min-width: 640px) { .modal-backdrop { align-items: center; } }
+    .modal { background: #fff; border-radius: 24px; width: 100%; max-width: 460px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.2); animation: slideUp 0.25s ease; max-height: 90vh; overflow-y: auto; }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+    .modal-title-wrap { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .modal-title { font-size: 24px; font-weight: 300; color: #1c1917; }
+    .modal-subtitle { font-size: 12px; color: #78716c; margin-top: 4px; }
+    .close-btn { color: #a8a29e; padding: 4px; }
+    .close-btn:active { color: #57534e; }
+    .close-btn svg { width: 20px; height: 20px; display: block; }
+
+    .age-display { display: flex; align-items: baseline; gap: 8px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 1px solid #f5f5f4; }
+    .age-display .big { font-size: 52px; font-weight: 300; color: #1c1917; line-height: 1; }
+    .age-display .label { color: #78716c; font-size: 14px; }
+    .age-display .until { margin-left: auto; font-size: 12px; color: #78716c; }
+
+    /* 詳細情報セクション */
+    .info-grid { display: grid; gap: 12px; margin-bottom: 16px; }
+    .info-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: #fafaf9; border-radius: 12px; }
+    .info-label { font-size: 12px; color: #78716c; font-weight: 500; }
+    .info-value { font-size: 14px; color: #1c1917; font-weight: 500; }
+    .info-value.member-no { font-family: 'SF Mono', Menlo, monospace; }
+    .info-value.yes { color: #15803d; }
+    .info-value.no { color: #b91c1c; }
+
+    .note-section { margin-bottom: 16px; }
+    .note-label { font-size: 11px; color: #78716c; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+    .note-text { font-size: 14px; color: #44403c; white-space: pre-wrap; line-height: 1.6; }
+
+    /* 写真ギャラリー */
+    .photo-section { margin-bottom: 16px; }
+    .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .photo-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; cursor: pointer; background: #f5f5f4; }
+
+    /* 写真フルスクリーン */
+    .photo-viewer { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; animation: fadeIn 0.2s; }
+    .photo-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .photo-viewer-close { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; background: rgba(255,255,255,0.15); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .photo-viewer-close svg { width: 20px; height: 20px; }
+
+    .modal-actions { display: flex; gap: 8px; padding-top: 8px; }
+    .btn-secondary { flex: 1; padding: 10px; background: #f5f5f4; color: #292524; border-radius: 12px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 6px; transition: background 0.15s; }
+    .btn-secondary:active { background: #e7e5e4; }
+    .btn-secondary svg { width: 16px; height: 16px; }
+    .btn-danger { padding: 10px 16px; background: #fef2f2; color: #b91c1c; border-radius: 12px; font-size: 14px; font-weight: 500; display: flex; align-items: center; justify-content: center; transition: background 0.15s; }
+    .btn-danger:active { background: #fee2e2; }
+    .btn-danger svg { width: 16px; height: 16px; }
+
+    /* フォーム */
+    .form-modal-title { font-size: 18px; font-weight: 500; color: #1c1917; }
+    .form-fields { display: flex; flex-direction: column; gap: 16px; }
+    .field-label { display: block; font-size: 11px; color: #57534e; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+    .field-input { width: 100%; padding: 12px 16px; background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 12px; font-size: 15px; color: #292524; transition: border-color 0.15s; }
+    .field-input:focus { border-color: #a8a29e; }
+    textarea.field-input { resize: none; }
+
+    /* チェックボックス風スイッチ */
+    .toggle-group { display: flex; gap: 8px; }
+    .toggle-btn { flex: 1; padding: 10px; background: #fafaf9; border: 1px solid #e7e5e4; border-radius: 10px; font-size: 14px; color: #78716c; font-weight: 500; transition: all 0.15s; }
+    .toggle-btn:active { background: #f5f5f4; }
+    .toggle-btn.active-yes { background: #f0fdf4; border-color: #86efac; color: #15803d; }
+    .toggle-btn.active-no { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+
+    /* 写真アップロード */
+    .photo-upload-area { display: flex; flex-wrap: wrap; gap: 8px; }
+    .photo-preview { position: relative; width: 80px; height: 80px; border-radius: 10px; overflow: hidden; background: #f5f5f4; }
+    .photo-preview img { width: 100%; height: 100%; object-fit: cover; }
+    .photo-remove { position: absolute; top: 2px; right: 2px; width: 22px; height: 22px; background: rgba(0,0,0,0.6); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .photo-remove svg { width: 12px; height: 12px; }
+    .photo-add-btn { width: 80px; height: 80px; background: #fafaf9; border: 1px dashed #d6d3d1; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #a8a29e; }
+    .photo-add-btn:active { background: #f5f5f4; }
+    .photo-add-btn svg { width: 24px; height: 24px; }
+    .photo-input { display: none; }
+
+    .btn-primary { width: 100%; padding: 14px; background: #1c1917; color: #fff; border-radius: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; transition: background 0.15s; }
+    .btn-primary:active { background: #44403c; }
+    .btn-primary:disabled { background: #d6d3d1; cursor: not-allowed; }
+
+    .confirm-modal { max-width: 340px; text-align: center; }
+    .confirm-modal p { font-size: 15px; color: #292524; margin-bottom: 20px; padding: 8px 0; }
+    .confirm-actions { display: flex; gap: 8px; }
+    .confirm-actions button { flex: 1; padding: 12px; border-radius: 12px; font-size: 14px; font-weight: 500; }
+
+    .install-banner { position: fixed; bottom: 24px; left: 24px; right: 96px; background: #1c1917; color: #fff; padding: 12px 16px; border-radius: 12px; font-size: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-shadow: 0 4px 14px rgba(0,0,0,0.25); z-index: 25; }
+    .install-banner button { color: #fff; padding: 4px 8px; font-size: 12px; opacity: 0.7; }
+    .install-banner .install-text { flex: 1; }
+  </style>
+</head>
+<body>
+  <div id="app" class="app"></div>
+
+  <script>
+    const STORAGE_KEY = 'age_tracker_people_v2';
+
+    // 旧バージョンからのマイグレーション
+    const migrateOldData = () => {
+      try {
+        const oldRaw = localStorage.getItem('age_tracker_people_v1');
+        const newRaw = localStorage.getItem(STORAGE_KEY);
+        if (oldRaw && !newRaw) {
+          const old = JSON.parse(oldRaw);
+          const migrated = old.map(p => ({
+            ...p,
+            memberNo: '',
+            canGuide: true,
+            anniversaryCard: false,
+            photos: []
+          }));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        }
+      } catch (e) {}
+    };
+    migrateOldData();
+
+    const loadPeople = () => {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+      catch { return []; }
+    };
+    const savePeople = (people) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(people));
+        return true;
+      } catch (e) {
+        alert('保存に失敗しました。写真の容量が大きすぎる可能性があります。');
+        return false;
+      }
+    };
+
+    // 状態
+    let people = loadPeople();
+    let query = '';
+    let filterSenior = false;
+    let filterMonth = null; // 1-12 or null
+    let modal = null;
+    let editingId = null;
+    let selectedId = null;
+    let viewerPhoto = null;
+    let form = { name: '', birthday: '', memberNo: '', canGuide: true, anniversaryCard: false, note: '', photos: [] };
+    let confirmCallback = null;
+
+    // 計算
+    const calcAge = (birthday) => {
+      if (!birthday) return null;
+      const b = new Date(birthday);
+      const t = new Date();
+      let age = t.getFullYear() - b.getFullYear();
+      const m = t.getMonth() - b.getMonth();
+      if (m < 0 || (m === 0 && t.getDate() < b.getDate())) age--;
+      return age;
+    };
+
+    const daysUntilBirthday = (birthday) => {
+      if (!birthday) return null;
+      const b = new Date(birthday);
+      const t = new Date();
+      const todayMid = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+      let next = new Date(t.getFullYear(), b.getMonth(), b.getDate());
+      if (next < todayMid) next = new Date(t.getFullYear() + 1, b.getMonth(), b.getDate());
+      return Math.round((next - todayMid) / (1000 * 60 * 60 * 24));
+    };
+
+    const birthMonth = (birthday) => {
+      if (!birthday) return null;
+      return new Date(birthday).getMonth() + 1;
+    };
+
+    const isSenior = (birthday) => {
+      const age = calcAge(birthday);
+      return age !== null && age >= 75;
+    };
+
+    const formatBirthday = (b) => {
+      if (!b) return '';
+      const d = new Date(b);
+      return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+    };
+
+    const escapeHtml = (str) => {
+      const div = document.createElement('div');
+      div.textContent = str || '';
+      return div.innerHTML;
+    };
+
+    // 画像を圧縮してbase64に変換
+    const resizeImage = (file, maxSize = 1024, quality = 0.75) => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let { width, height } = img;
+            if (width > height) {
+              if (width > maxSize) { height = height * (maxSize / width); width = maxSize; }
+            } else {
+              if (height > maxSize) { width = width * (maxSize / height); height = maxSize; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    };
+
+    const ICONS = {
+      search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
+      plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
+      cake: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg>',
+      close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>',
+      edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+      trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+      user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+      photo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>',
+      card: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>'
+    };
+
+    const render = () => {
+      const q = query.trim().toLowerCase();
+      let filtered = q
+        ? people.filter(p => p.name.toLowerCase().includes(q) || (p.memberNo || '').toLowerCase().includes(q))
+        : people.slice();
+      if (filterSenior) filtered = filtered.filter(p => isSenior(p.birthday));
+      if (filterMonth) filtered = filtered.filter(p => birthMonth(p.birthday) === filterMonth);
+      filtered.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+
+      const seniorCount = people.filter(p => isSenior(p.birthday)).length;
+
+      const upcoming = people
+        .map(p => ({ ...p, days: daysUntilBirthday(p.birthday) }))
+        .filter(p => p.days !== null && p.days <= 30)
+        .sort((a, b) => a.days - b.days);
+
+      let html = `
+        <header class="header">
+          <h1>年齢手帳</h1>
+          <p>Age Tracker</p>
+        </header>
+      `;
+
+      if (upcoming.length > 0 && !filterSenior && !filterMonth) {
+        html += `<div class="upcoming">
+          <div class="upcoming-header">${ICONS.cake}<h2>近づいている誕生日</h2></div>
+          ${upcoming.map(p => `
+            <button class="upcoming-item" data-action="detail" data-id="${p.id}">
+              <span>${escapeHtml(p.name)}</span>
+              <span class="days">${p.days === 0 ? '今日！🎉' : `あと ${p.days} 日`}</span>
+            </button>
+          `).join('')}
+        </div>`;
+      }
+
+      html += `
+        <div class="search-wrap">
+          ${ICONS.search}
+          <input type="text" class="search-input" id="search-input" placeholder="名前・会員番号で検索..." value="${escapeHtml(query)}">
+        </div>
+        <div class="filter-row">
+          <button class="filter-btn ${!filterSenior ? 'active' : ''}" id="filter-all">
+            すべて <span class="count">${people.length}</span>
+          </button>
+          <button class="filter-btn ${filterSenior ? 'active' : ''}" id="filter-senior">
+            75歳以上 <span class="count">${seniorCount}</span>
+          </button>
+        </div>
+        <div class="month-filter">
+          <button class="month-btn ${filterMonth === null ? 'active' : ''}" data-month="0">全月</button>
+          ${[1,2,3,4,5,6,7,8,9,10,11,12].map(m => `
+            <button class="month-btn ${filterMonth === m ? 'active' : ''}" data-month="${m}">${m}月</button>
+          `).join('')}
+        </div>
+      `;
+
+      if (filtered.length === 0) {
+        html += `<div class="empty">`;
+        if (people.length === 0) {
+          html += ICONS.user + '<p>「＋」ボタンから登録してください</p>';
+        } else {
+          html += '<p>該当する人がいません</p>';
+        }
+        html += `</div>`;
+      } else {
+        html += `<div class="person-list">${filtered.map(p => {
+          const age = calcAge(p.birthday);
+          const days = daysUntilBirthday(p.birthday);
+          const senior = age !== null && age >= 75;
+          const photoCount = (p.photos || []).length;
+          return `
+            <button class="person-card" data-action="detail" data-id="${p.id}">
+              <div class="person-info">
+                <div class="person-name">
+                  <span class="name-text">${escapeHtml(p.name)}</span>
+                  ${senior ? '<span class="badge-senior">75+</span>' : ''}
+                  ${p.canGuide === false ? '<span class="badge-noguide">案内不可</span>' : ''}
+                  ${p.anniversaryCard ? `<span class="badge-card">${ICONS.card}カード</span>` : ''}
+                  ${days === 0 ? '<span>🎂</span>' : ''}
+                </div>
+                <div class="person-meta">
+                  ${p.memberNo ? `<span class="person-member-no">№${escapeHtml(p.memberNo)}</span>` : ''}
+                  <span>${formatBirthday(p.birthday)}</span>
+                  ${photoCount > 0 ? `<span class="photo-icon">${ICONS.photo}${photoCount}</span>` : ''}
+                </div>
+              </div>
+              <div class="person-age"><span class="num">${age}</span><span class="unit">歳</span></div>
+            </button>
+          `;
+        }).join('')}</div>`;
+      }
+
+      document.getElementById('app').innerHTML = html;
+
+      if (!document.getElementById('fab')) {
+        const fab = document.createElement('button');
+        fab.id = 'fab';
+        fab.className = 'fab';
+        fab.innerHTML = ICONS.plus;
+        fab.setAttribute('aria-label', '追加');
+        fab.addEventListener('click', openNewForm);
+        document.body.appendChild(fab);
+      }
+
+      const searchInput = document.getElementById('search-input');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          query = e.target.value;
+          render();
+          document.getElementById('search-input').focus();
+        });
+      }
+
+      document.getElementById('filter-all')?.addEventListener('click', () => {
+        filterSenior = false;
+        render();
+      });
+      document.getElementById('filter-senior')?.addEventListener('click', () => {
+        filterSenior = true;
+        render();
+      });
+
+      document.querySelectorAll('.month-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const m = parseInt(btn.dataset.month);
+          filterMonth = m === 0 ? null : m;
+          render();
+        });
+      });
+
+      document.querySelectorAll('[data-action="detail"]').forEach(el => {
+        el.addEventListener('click', () => openDetail(el.dataset.id));
+      });
+
+      renderModal();
+      renderPhotoViewer();
+    };
+
+    const renderModal = () => {
+      let existing = document.getElementById('modal-root');
+      if (existing) existing.remove();
+      if (!modal) return;
+
+      const root = document.createElement('div');
+      root.id = 'modal-root';
+
+      if (modal === 'detail') {
+        const p = people.find(x => x.id === selectedId);
+        if (!p) { modal = null; return; }
+        const age = calcAge(p.birthday);
+        const days = daysUntilBirthday(p.birthday);
+        const senior = age !== null && age >= 75;
+        const untilText = days === 0 ? '今日が誕生日 🎉' : `次の誕生日まで ${days} 日`;
+        const photos = p.photos || [];
+
+        root.innerHTML = `
+          <div class="modal-backdrop" data-close="1">
+            <div class="modal">
+              <div class="modal-header">
+                <div>
+                  <div class="modal-title-wrap">
+                    <span class="modal-title">${escapeHtml(p.name)}</span>
+                    ${senior ? '<span class="badge-senior">75+</span>' : ''}
+                  </div>
+                  <div class="modal-subtitle">${formatBirthday(p.birthday)}</div>
+                </div>
+                <button class="close-btn" data-close="1">${ICONS.close}</button>
+              </div>
+              <div class="age-display">
+                <span class="big">${age}</span>
+                <span class="label">歳</span>
+                <span class="until">${untilText}</span>
+              </div>
+
+              <div class="info-grid">
+                ${p.memberNo ? `
+                  <div class="info-row">
+                    <span class="info-label">会員番号</span>
+                    <span class="info-value member-no">${escapeHtml(p.memberNo)}</span>
+                  </div>
+                ` : ''}
+                <div class="info-row">
+                  <span class="info-label">ご案内</span>
+                  <span class="info-value ${p.canGuide !== false ? 'yes' : 'no'}">${p.canGuide !== false ? '可' : '不可'}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">アニバーサリーカード</span>
+                  <span class="info-value ${p.anniversaryCard ? 'yes' : ''}">${p.anniversaryCard ? '有' : '無'}</span>
+                </div>
+              </div>
+
+              ${p.note ? `<div class="note-section">
+                <div class="note-label">メモ</div>
+                <div class="note-text">${escapeHtml(p.note)}</div>
+              </div>` : ''}
+
+              ${photos.length > 0 ? `<div class="photo-section">
+                <div class="note-label">写真 (${photos.length})</div>
+                <div class="photo-grid">
+                  ${photos.map((src, i) => `<img class="photo-thumb" src="${src}" data-photo="${i}" alt="">`).join('')}
+                </div>
+              </div>` : ''}
+
+              <div class="modal-actions">
+                <button class="btn-secondary" id="edit-btn">${ICONS.edit}編集</button>
+                <button class="btn-danger" id="delete-btn">${ICONS.trash}</button>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (modal === 'form') {
+        const photos = form.photos || [];
+        root.innerHTML = `
+          <div class="modal-backdrop" data-close="1">
+            <div class="modal">
+              <div class="modal-header">
+                <div class="form-modal-title">${editingId ? '編集' : '新しく登録'}</div>
+                <button class="close-btn" data-close="1">${ICONS.close}</button>
+              </div>
+              <div class="form-fields">
+                <div>
+                  <label class="field-label">名前 <span style="color:#b91c1c">*</span></label>
+                  <input type="text" class="field-input" id="f-name" placeholder="山田 太郎" value="${escapeHtml(form.name)}">
+                </div>
+                <div>
+                  <label class="field-label">生年月日 <span style="color:#b91c1c">*</span></label>
+                  <input type="date" class="field-input" id="f-birthday" value="${form.birthday}">
+                </div>
+                <div>
+                  <label class="field-label">会員番号</label>
+                  <input type="text" class="field-input" id="f-memberno" placeholder="例: 12345" value="${escapeHtml(form.memberNo)}">
+                </div>
+                <div>
+                  <label class="field-label">ご案内</label>
+                  <div class="toggle-group">
+                    <button type="button" class="toggle-btn ${form.canGuide ? 'active-yes' : ''}" data-toggle="canGuide" data-value="true">可</button>
+                    <button type="button" class="toggle-btn ${!form.canGuide ? 'active-no' : ''}" data-toggle="canGuide" data-value="false">不可</button>
+                  </div>
+                </div>
+                <div>
+                  <label class="field-label">アニバーサリーカード</label>
+                  <div class="toggle-group">
+                    <button type="button" class="toggle-btn ${form.anniversaryCard ? 'active-yes' : ''}" data-toggle="anniversaryCard" data-value="true">有</button>
+                    <button type="button" class="toggle-btn ${!form.anniversaryCard ? 'active-no' : ''}" data-toggle="anniversaryCard" data-value="false">無</button>
+                  </div>
+                </div>
+                <div>
+                  <label class="field-label">メモ</label>
+                  <textarea class="field-input" id="f-note" placeholder="好きなもの、思い出など..." rows="3">${escapeHtml(form.note)}</textarea>
+                </div>
+                <div>
+                  <label class="field-label">写真（複数枚可）</label>
+                  <div class="photo-upload-area">
+                    ${photos.map((src, i) => `
+                      <div class="photo-preview">
+                        <img src="${src}" alt="">
+                        <button type="button" class="photo-remove" data-remove-photo="${i}">${ICONS.close}</button>
+                      </div>
+                    `).join('')}
+                    <button type="button" class="photo-add-btn" id="photo-add-btn">${ICONS.plus}</button>
+                    <input type="file" class="photo-input" id="photo-input" accept="image/*" multiple>
+                  </div>
+                </div>
+                <button class="btn-primary" id="submit-btn" ${(!form.name.trim() || !form.birthday) ? 'disabled' : ''}>
+                  ${editingId ? '更新する' : '登録する'}
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      } else if (modal === 'confirm') {
+        root.innerHTML = `
+          <div class="modal-backdrop">
+            <div class="modal confirm-modal">
+              <p>本当に削除しますか？</p>
+              <div class="confirm-actions">
+                <button class="btn-secondary" id="cancel-confirm">キャンセル</button>
+                <button class="btn-danger" id="ok-confirm">削除</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      document.body.appendChild(root);
+      bindModalEvents();
+    };
+
+    const renderPhotoViewer = () => {
+      let existing = document.getElementById('photo-viewer-root');
+      if (existing) existing.remove();
+      if (!viewerPhoto) return;
+      const root = document.createElement('div');
+      root.id = 'photo-viewer-root';
+      root.innerHTML = `
+        <div class="photo-viewer" id="viewer-bg">
+          <button class="photo-viewer-close" id="viewer-close">${ICONS.close}</button>
+          <img src="${viewerPhoto}" alt="">
+        </div>
+      `;
+      document.body.appendChild(root);
+      document.getElementById('viewer-bg').addEventListener('click', () => {
+        viewerPhoto = null;
+        renderPhotoViewer();
+      });
+    };
+
+    const bindModalEvents = () => {
+      document.querySelectorAll('[data-close]').forEach(el => {
+        el.addEventListener('click', (e) => {
+          if (e.target === el) closeModal();
+        });
+      });
+
+      if (modal === 'detail') {
+        document.getElementById('edit-btn')?.addEventListener('click', () => {
+          const p = people.find(x => x.id === selectedId);
+          if (p) openEditForm(p);
+        });
+        document.getElementById('delete-btn')?.addEventListener('click', () => {
+          openConfirm(() => deletePerson(selectedId));
+        });
+        document.querySelectorAll('.photo-thumb').forEach(img => {
+          img.addEventListener('click', () => {
+            viewerPhoto = img.src;
+            renderPhotoViewer();
+          });
+        });
+      }
+
+      if (modal === 'form') {
+        const nameEl = document.getElementById('f-name');
+        const bdayEl = document.getElementById('f-birthday');
+        const memberEl = document.getElementById('f-memberno');
+        const noteEl = document.getElementById('f-note');
+
+        nameEl.addEventListener('input', () => { form.name = nameEl.value; updateSubmitBtn(); });
+        bdayEl.addEventListener('input', () => { form.birthday = bdayEl.value; updateSubmitBtn(); });
+        memberEl.addEventListener('input', () => { form.memberNo = memberEl.value; });
+        noteEl.addEventListener('input', () => { form.note = noteEl.value; });
+
+        document.querySelectorAll('[data-toggle]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const key = btn.dataset.toggle;
+            form[key] = btn.dataset.value === 'true';
+            renderModal();
+          });
+        });
+
+        document.getElementById('photo-add-btn').addEventListener('click', () => {
+          document.getElementById('photo-input').click();
+        });
+
+        document.getElementById('photo-input').addEventListener('change', async (e) => {
+          const files = Array.from(e.target.files);
+          for (const file of files) {
+            try {
+              const dataUrl = await resizeImage(file);
+              form.photos = [...(form.photos || []), dataUrl];
+            } catch (err) {
+              console.error('画像の処理に失敗しました', err);
+            }
+          }
+          renderModal();
+        });
+
+        document.querySelectorAll('[data-remove-photo]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const idx = parseInt(btn.dataset.removePhoto);
+            form.photos = form.photos.filter((_, i) => i !== idx);
+            renderModal();
+          });
+        });
+
+        document.getElementById('submit-btn').addEventListener('click', submitForm);
+      }
+
+      if (modal === 'confirm') {
+        document.getElementById('cancel-confirm').addEventListener('click', closeModal);
+        document.getElementById('ok-confirm').addEventListener('click', () => {
+          if (confirmCallback) confirmCallback();
+          closeModal();
+        });
+      }
+    };
+
+    const updateSubmitBtn = () => {
+      const btn = document.getElementById('submit-btn');
+      if (btn) btn.disabled = !form.name.trim() || !form.birthday;
+    };
+
+    const closeModal = () => { modal = null; renderModal(); };
+    const openDetail = (id) => { selectedId = id; modal = 'detail'; renderModal(); };
+    const openNewForm = () => {
+      editingId = null;
+      form = { name: '', birthday: '', memberNo: '', canGuide: true, anniversaryCard: false, note: '', photos: [] };
+      modal = 'form';
+      renderModal();
+      setTimeout(() => document.getElementById('f-name')?.focus(), 50);
+    };
+    const openEditForm = (person) => {
+      editingId = person.id;
+      form = {
+        name: person.name,
+        birthday: person.birthday,
+        memberNo: person.memberNo || '',
+        canGuide: person.canGuide !== false,
+        anniversaryCard: !!person.anniversaryCard,
+        note: person.note || '',
+        photos: person.photos ? [...person.photos] : []
+      };
+      modal = 'form';
+      renderModal();
+    };
+    const openConfirm = (callback) => {
+      confirmCallback = callback;
+      modal = 'confirm';
+      renderModal();
+    };
+    const submitForm = () => {
+      if (!form.name.trim() || !form.birthday) return;
+      const data = {
+        name: form.name.trim(),
+        birthday: form.birthday,
+        memberNo: form.memberNo.trim(),
+        canGuide: form.canGuide,
+        anniversaryCard: form.anniversaryCard,
+        note: form.note,
+        photos: form.photos || []
+      };
+      if (editingId) {
+        people = people.map(p => p.id === editingId ? { ...p, ...data } : p);
+      } else {
+        people.push({ id: Date.now().toString(), ...data });
+      }
+      if (savePeople(people)) {
+        closeModal();
+        render();
+      }
+    };
+    const deletePerson = (id) => {
+      people = people.filter(p => p.id !== id);
+      savePeople(people);
+      render();
+    };
+
+    // PWA インストール案内
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      showInstallBanner();
+    });
+    const showInstallBanner = () => {
+      if (document.getElementById('install-banner')) return;
+      if (localStorage.getItem('install_dismissed')) return;
+      const banner = document.createElement('div');
+      banner.id = 'install-banner';
+      banner.className = 'install-banner';
+      banner.innerHTML = `
+        <span class="install-text">ホーム画面に追加できます</span>
+        <button id="install-btn">追加</button>
+        <button id="dismiss-btn">×</button>
+      `;
+      document.body.appendChild(banner);
+      document.getElementById('install-btn').addEventListener('click', async () => {
+        if (deferredPrompt) {
+          deferredPrompt.prompt();
+          await deferredPrompt.userChoice;
+          deferredPrompt = null;
+          banner.remove();
+        }
+      });
+      document.getElementById('dismiss-btn').addEventListener('click', () => {
+        localStorage.setItem('install_dismissed', '1');
+        banner.remove();
+      });
+    };
+
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+
+    render();
+  </script>
+</body>
+</html>
